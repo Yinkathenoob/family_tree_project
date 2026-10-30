@@ -4,7 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
-	"time"
+	"net/http"
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
@@ -23,60 +23,16 @@ func main() {
 
 	store := NewStore(db)
 
-	// 2. Add a person WITH a birth date
-	bd := time.Date(1950, 3, 15, 0, 0, 0, 0, time.UTC)
-	withDate, err := store.AddPerson(Person{
-		FirstName: "Dated",
-		Gender:    "male",
-		FamilyID:  1,
-		BirthDate: &bd,
-	})
-	if err != nil {
-		log.Fatal("add dated person:", err)
-	}
+	api := &API{store: store}
 
-	// 3. Add a person WITHOUT a birth date (BirthDate stays nil)
-	noDate, err := store.AddPerson(Person{
-		FirstName: "Undated",
-		Gender:    "female",
-		FamilyID:  1,
-	})
-	if err != nil {
-		log.Fatal("add undated person:", err)
-	}
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /people/{id}", api.getPerson)
+	mux.HandleFunc("GET /people/{id}/children", api.getChildren)
+	mux.HandleFunc("GET /people/{id}/siblings", api.getSiblings)
 
-	// 4. Read both back from the database
-	d1, err := store.findByID(withDate.ID)
-	if err != nil {
-		log.Fatal("find dated person:", err)
-	}
-	d2, err := store.findByID(noDate.ID)
-	if err != nil {
-		log.Fatal("find undated person:", err)
-	}
-
-	// 5. Check what came back
-	if d1.BirthDate != nil {
-		fmt.Printf("%s born: %s\n", d1.FirstName, d1.BirthDate.Format("2006-01-02"))
-	} else {
-		fmt.Printf("%s: birth date came back nil (expected a date!)\n", d1.FirstName)
-	}
-
-	if d2.BirthDate == nil {
-		fmt.Printf("%s has no recorded birth date\n", d2.FirstName)
-	} else {
-		fmt.Printf("%s: unexpected birth date %s\n", d2.FirstName, d2.BirthDate.Format("2006-01-02"))
-	}
-
-	kids, err := store.Children(1)
-	if err != nil {
-		log.Fatal("children:", err)
-	}
-	fmt.Println("Children of person 1:", len(kids))
-
-	sibs, err := store.Siblings(3)
-	if err != nil {
-		log.Fatal("siblings:", err)
-	}
-	fmt.Println("Siblings of person 3:", len(sibs))
+	fmt.Println("Server listening on http://localhost:8080")
+	log.Fatal(http.ListenAndServe(":8080", mux))
 }
+
+
+
